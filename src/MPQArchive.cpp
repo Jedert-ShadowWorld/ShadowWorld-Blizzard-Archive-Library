@@ -63,7 +63,9 @@ bool BlizzardArchive::Archive::MPQArchive::writeFile(Listfile::FileKey const& fi
 
     // static_cast<int>(locale) - 1 // use neutral locale
 
-    if (SFileCreateFile(_handle, file_key.filepath().c_str(), 0, buf_size, 0, dwFlags, &hFile))
+    std::string const mpq_path = ClientData::normalizeFilenameWoW(file_key.filepath());
+
+    if (SFileCreateFile(_handle, mpq_path.c_str(), 0, buf_size, 0, dwFlags, &hFile))
     {
         // Write the file
         if (hFile != 0 && !SFileWriteFile(hFile, file_data, buf_size, dwCompression))
@@ -71,17 +73,17 @@ bool BlizzardArchive::Archive::MPQArchive::writeFile(Listfile::FileKey const& fi
             // exception "Failed to write data to the MPQ"
             auto nError = GetLastError();
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileWriteFile: Error creating file: " +
-                file_key.filepath() + "in archive" + _path);
+                mpq_path + " in archive" + _path);
         }
 
         // do this now or after checks?
-        _listfile->addFile(file_key.filepath());
+        _listfile->addFile(mpq_path);
 
         if (!SFileFinishFile(hFile))
         {
             auto nError = GetLastError();
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileFinishFile: Error creating file: " +
-            file_key.filepath() + "in archive" + _path);
+            mpq_path + " in archive" + _path);
         }
     }
     else
@@ -92,7 +94,7 @@ bool BlizzardArchive::Archive::MPQArchive::writeFile(Listfile::FileKey const& fi
         {
             // don't allow chain crashing on the same error
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileCreateFile: Error creating file: " +
-                file_key.filepath() + "in archive" + _path + ", got the same error twice.", error);
+                mpq_path + " in archive" + _path + ", got the same error twice.", error);
         }
 
         // handle the various errors
@@ -102,28 +104,28 @@ bool BlizzardArchive::Archive::MPQArchive::writeFile(Listfile::FileKey const& fi
 
             DWORD dwMaxFileCount = SFileGetMaxFileCount(_handle);
             if (!SFileSetMaxFileCount(_handle, dwMaxFileCount + 1))
-                return true;
+                return false;
             // add file again
             return writeFile(file_key, file_data, buf_size, locale, error, compress);
         }
         else if (error == ERROR_ALREADY_EXISTS)
         {
             // delete file
-            if (!SFileRemoveFile(_handle, file_key.filepath().c_str(), 0))
+            if (!SFileRemoveFile(_handle, mpq_path.c_str(), 0))
                 throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileRemoveFile: Error replacing file: " +
-                    file_key.filepath() + "in archive" + _path, error);
+                    mpq_path + " in archive" + _path, error);
 
             return writeFile(file_key, file_data, buf_size, locale, error, compress);
         }
         else if (error == ERROR_ACCESS_DENIED)
         {
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileCreateFile: Error creating file: " +
-                file_key.filepath() + "in archive" + _path + "\nMPQ Archive ACCESS DENIED, make sure no other application is using this MPQ.", error);
+                mpq_path + " in archive" + _path + "\nMPQ Archive ACCESS DENIED, make sure no other application is using this MPQ.", error);
         }
         else
         {
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::writeFile() SFileCreateFile: Error creating file: " +
-                file_key.filepath() + "in archive" + _path + ", unhandled error", error);
+                mpq_path + " in archive" + _path + ", unhandled error", error);
         }
     }
     return true;
@@ -152,17 +154,18 @@ bool BlizzardArchive::Archive::MPQArchive::addFile(Listfile::FileKey const& wow_
         dwCompression |= MPQ_COMPRESSION_ZLIB; // MPQ_COMPRESSION_BZIP2 is super slow
     }
 
+    std::string const mpq_path = ClientData::normalizeFilenameWoW(wow_path.filepath());
 
-    auto has_file = SFileHasFile(_handle, wow_path.filepath().c_str());
+    auto has_file = SFileHasFile(_handle, mpq_path.c_str());
     if (has_file)
         // delete file
-        if (!SFileRemoveFile(_handle, wow_path.filepath().c_str(), 0))
+        if (!SFileRemoveFile(_handle, mpq_path.c_str(), 0))
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::addFile() SFileRemoveFile: Error replacing file: " +
-                wow_path.filepath() + "in archive" + _path);
+                mpq_path + " in archive" + _path);
     
-    if (SFileAddFileEx(_handle, file_disk_path.c_str(), wow_path.filepath().c_str(), dwFlags, dwCompression, MPQ_COMPRESSION_NEXT_SAME))
+    if (SFileAddFileEx(_handle, file_disk_path.c_str(), mpq_path.c_str(), dwFlags, dwCompression, MPQ_COMPRESSION_NEXT_SAME))
     {
-        _listfile->addFile(wow_path.filepath());
+        _listfile->addFile(mpq_path);
 
         // auto dwVerifyResult = SFileVerifyFile(_handle, wow_path.filepath().c_str(), MPQ_ATTRIBUTE_CRC32 | MPQ_ATTRIBUTE_MD5);
         return true;
@@ -175,7 +178,7 @@ bool BlizzardArchive::Archive::MPQArchive::addFile(Listfile::FileKey const& wow_
         {
             // don't allow chain crashing on the same error
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::addFile() SFileAddFileEx: Error adding file: " +
-                wow_path.filepath() + "to archive" + _path + ", got the same error twice.", error);
+                mpq_path + " to archive" + _path + ", got the same error twice.", error);
         }
 
         // handle the various errors
@@ -191,21 +194,21 @@ bool BlizzardArchive::Archive::MPQArchive::addFile(Listfile::FileKey const& wow_
         else if (error == ERROR_ALREADY_EXISTS)
         {
             // delete file
-            if (!SFileRemoveFile(_handle, wow_path.filepath().c_str(), 0))
+            if (!SFileRemoveFile(_handle, mpq_path.c_str(), 0))
                 throw Exceptions::Archive::FileWriteFailedError("MPQArchive::addFile() SFileRemoveFile: Error replacing file: " +
-                    wow_path.filepath() + "in archive" + _path, error);
+                    mpq_path + " in archive" + _path, error);
 
             return addFile(wow_path, file_disk_path, locale, error, compress);
         }
         else if (error == ERROR_ACCESS_DENIED)
         {
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::addFile() SFileAddFileEx: Error creating file: " +
-                wow_path.filepath() + "in archive" + _path + "\nMPQ Archive ACCESS DENIED, make sure no other application is using this MPQ.", error);
+                mpq_path + " in archive" + _path + "\nMPQ Archive ACCESS DENIED, make sure no other application is using this MPQ.", error);
         }
         else
         {
             throw Exceptions::Archive::FileWriteFailedError("MPQArchive::addFile() SFileAddFileEx: Error creating file: " +
-                wow_path.filepath() + "in archive" + _path + ", unhandled error", error);
+                mpq_path + " in archive" + _path + ", unhandled error", error);
         }
     }
 

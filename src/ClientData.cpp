@@ -95,13 +95,18 @@ std::optional<Archive::MPQArchive*> BlizzardArchive::ClientData::getMPQArchive(s
 
     const std::lock_guard _lock(_mutex);
 
-    // case sensitive
     std::string mpq_path = (fs::path(_path) / "Data" / archive_name).string();
 
     for (auto* archive_ptr : _archives)
     {
-        // full disk paths.
-        if (archive_ptr->path() == mpq_path)
+        // The startup template scan and the export dialog can produce the same
+        // file with different case ("patch-a.MPQ" vs "patch-A.MPQ"), so compare
+        // filesystem identity, not strings. A second MPQArchive object on an
+        // already-open archive makes the write reopen fail with a sharing
+        // violation and leaves stale tables in the first object.
+        std::error_code ec;
+        if (archive_ptr->path() == mpq_path
+            || fs::equivalent(fs::path(archive_ptr->path()), fs::path(mpq_path), ec))
         {
             if (Archive::MPQArchive* mpqArchive_ptr = dynamic_cast<Archive::MPQArchive*>(archive_ptr))
             {

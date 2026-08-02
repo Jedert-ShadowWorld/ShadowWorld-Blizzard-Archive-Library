@@ -450,7 +450,8 @@ bool ClientData::readFile(Listfile::FileKey const& file_key, std::vector<char>& 
   return false;
 }
 
-std::array<int, 2> BlizzardArchive::ClientData::saveLocalFilesToArchive(Archive::MPQArchive* archive, bool compress, bool compact)
+std::array<int, 2> BlizzardArchive::ClientData::saveLocalFilesToArchive(Archive::MPQArchive* archive, bool compress, bool compact
+                                                                        , std::function<void(int)> const& progress)
 {
     // Only supports MPQ currently.
     if (_storage_type != StorageType::MPQ)
@@ -484,6 +485,9 @@ std::array<int, 2> BlizzardArchive::ClientData::saveLocalFilesToArchive(Archive:
                     continue;
 
                 file_count++;
+
+                if (progress)
+                    progress(file_count);
 
                 // use SFileAddFileEx high level function which does everything, or read manually
                 bool full_write_file = false;

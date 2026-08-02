@@ -160,7 +160,10 @@ namespace BlizzardArchive
 
 
     // total files count, files success count
-    std::array<int, 2> saveLocalFilesToArchive(Archive::MPQArchive* archive, bool compress, bool compact);
+    // progress is called after each processed file with the running count, so
+    // the caller can keep its UI alive during a long export
+    std::array<int, 2> saveLocalFilesToArchive(Archive::MPQArchive* archive, bool compress, bool compact
+                                               , std::function<void(int)> const& progress = {});
 
     [[nodiscard]]
     bool exists(Listfile::FileKey const& file_key);

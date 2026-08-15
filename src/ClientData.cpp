@@ -22,6 +22,13 @@ ClientData::ClientData(std::string const& path, ClientVersion version, Locale lo
   , _local_path(ClientData::normalizeFilenameUnix(local_path))
 {
 
+  if (_storage_type == StorageType::CASC)
+  {
+    fs::path client_path(_path);
+    if (client_path.filename() == "_retail_" && fs::exists(client_path.parent_path() / ".build.info"))
+      _path = client_path.parent_path().string();
+  }
+
   validateLocale();
 
   switch (_storage_type)
@@ -44,6 +51,13 @@ ClientData::ClientData(std::string const& path, std::string const& cdn_cache_pat
     , _local_path(ClientData::normalizeFilenameUnix(local_path))
     , _cdn_cache_path(cdn_cache_path)
 {
+
+  if (_storage_type == StorageType::CASC)
+  {
+    fs::path client_path(_path);
+    if (client_path.filename() == "_retail_" && fs::exists(client_path.parent_path() / ".build.info"))
+      _path = client_path.parent_path().string();
+  }
 
   validateLocale();
 
@@ -406,10 +420,8 @@ void ClientData::validateLocale()
     case StorageType::CASC:
     {
       if (_locale_mode == Locale::AUTO)
-      {
-        throw Exceptions::Locale::IncorrectLocaleModeError("Automatic locale detection is not"
-                                                           " supported for CASC-based clients.");
-      }
+        _locale_mode = Locale::enUS;
+
       break;
     }
   }

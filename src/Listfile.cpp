@@ -4,8 +4,20 @@
 #include <fstream>
 #include <sstream>
 #include <cstdint>
+#include <mutex>
+#include <unordered_map>
 
 using namespace BlizzardArchive::Listfile;
+
+namespace
+{
+  // CASC listfiles can contain multiple FileDataIDs for the same historical
+  // pathname. When a modern container gives us an authoritative FileDataID and
+  // we resolve it to a path, remember that exact pairing so a later legacy-style
+  // pathname lookup does not silently select a stale duplicate ID.
+  std::mutex resolved_id_mutex;
+  std::unordered_map<std::string, std::uint32_t> resolved_path_ids;
+}
 
 FileKey::FileKey()
 : _file_data_id(0)
@@ -87,9 +99,6 @@ void Listfile::initFromCSV(std::string const& listfile_path)
 
 void Listfile::initFromFileList(std::vector<char> const& file_list_blob)
 {
-  // TODO: feels very sketchy, copied it from original Noggit.
-  // check if approach from initFromCSV() works any better (less reallocs maybe).
-
   std::string current;
   for (char c : file_list_blob)
   {
@@ -116,22 +125,28 @@ void Listfile::initFromFileList(std::vector<char> const& file_list_blob)
 
 void BlizzardArchive::Listfile::Listfile::addFile(std::string const& filepath)
 {
-    _path_to_fdid[ClientData::normalizeFilenameInternal(filepath)] = 0;
+  _path_to_fdid[ClientData::normalizeFilenameInternal(filepath)] = 0;
 }
 
 std::uint32_t Listfile::getFileDataID(std::string const& filename) const
 {
-  auto it = _path_to_fdid.find(filename);
+  auto const normalized = ClientData::normalizeFilenameInternal(filename);
+
+  {
+    std::lock_guard<std::mutex> lock(resolved_id_mutex);
+    auto const resolved = resolved_path_ids.find(normalized);
+    if (resolved != resolved_path_ids.end())
+      return resolved->second;
+  }
+
+  auto it = _path_to_fdid.find(normalized);
 
   if (it != _path_to_fdid.end())
   {
     return it->second;
   }
-  else
-  {
-    return 0; // Not found
-  }
 
+  return 0;
 }
 
 std::string Listfile::getPath(std::uint32_t file_data_id) const
@@ -140,13 +155,15 @@ std::string Listfile::getPath(std::uint32_t file_data_id) const
 
   if (it != _fdid_to_path.end())
   {
+    auto const normalized = ClientData::normalizeFilenameInternal(it->second);
+    {
+      std::lock_guard<std::mutex> lock(resolved_id_mutex);
+      resolved_path_ids[normalized] = file_data_id;
+    }
     return it->second;
   }
-  else
-  {
-    return ""; // Not found
-  }
 
+  return "";
 }
 
 bool FileKey::deduceOtherComponent(const Listfile* listfile)
@@ -239,4 +256,3 @@ FileKey& FileKey::operator= (FileKey const& other)
 
   return *this;
 }
-

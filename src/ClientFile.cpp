@@ -197,7 +197,12 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
     return;
   }
 
-  if (client_data->readFile(file_key, _buffer))
+  // For modern CASC clients, deduceOtherComponent() may add the authoritative
+  // FileDataID to a pathname-only key. Read with the resolved key so CASC opens
+  // by FileDataID instead of performing a second pathname lookup. This keeps
+  // modern ADT/M2 references stable even when listfile aliases or renamed paths
+  // are present.
+  if (client_data->readFile(_file_key, _buffer))
   {
     _eof = false;
     adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, client_data);
@@ -206,7 +211,7 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
 
   throw Exceptions::FileReadFailedError(
     "File '"
-    + (file_key.hasFilepath() ? file_key.filepath() : std::to_string(file_key.fileDataID()))
+    + (_file_key.hasFilepath() ? _file_key.filepath() : std::to_string(_file_key.fileDataID()))
     + "' does not exist or some other error occured.");
 }
 

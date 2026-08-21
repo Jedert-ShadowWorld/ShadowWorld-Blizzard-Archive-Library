@@ -4,6 +4,8 @@
 #include <ClientData.hpp>
 #include <BaseArchive.hpp>
 #include <filesystem>
+#include <cstdint>
+#include <vector>
 
 namespace BlizzardArchive
 {
@@ -46,6 +48,9 @@ namespace BlizzardArchive
     [[nodiscard]]
     bool isEof() const;
 
+    [[nodiscard]]
+    std::vector<std::uint32_t> const& m2TextureFileDataIDs() const { return _m2_texture_file_data_ids; }
+
     void seek(std::size_t offset);
     void seekRelative(std::size_t offset);
     void close();
@@ -69,12 +74,11 @@ namespace BlizzardArchive
   private:
     bool _eof;
     std::vector<char> _buffer;
+    std::vector<std::uint32_t> _m2_texture_file_data_ids;
     size_t _pointer;
     bool _external;
-    std::filesystem ::path _disk_path;
+    std::filesystem::path _disk_path;
     Listfile::FileKey _file_key;
-    
-
   };
 }
 

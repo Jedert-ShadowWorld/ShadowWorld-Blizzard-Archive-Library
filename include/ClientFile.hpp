@@ -5,6 +5,7 @@
 #include <BaseArchive.hpp>
 #include <filesystem>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace BlizzardArchive
@@ -31,6 +32,11 @@ namespace BlizzardArchive
     ClientFile& operator=(ClientFile const&) = delete;
     ClientFile& operator=(ClientFile&&) = delete;
 
+    // Modern ADT/WMO/M2 references carry an authoritative FileDataID. Legacy
+    // Noggit call sites often retain only the pathname, so remember the pairing
+    // and restore the FileDataID when a later ClientFile is opened by path.
+    static void registerModernFileDataID(std::string const& filepath, std::uint32_t file_data_id);
+
     std::size_t read(void* dest, std::size_t bytes);
 
     [[nodiscard]]
@@ -50,6 +56,9 @@ namespace BlizzardArchive
 
     [[nodiscard]]
     std::vector<std::uint32_t> const& m2TextureFileDataIDs() const { return _m2_texture_file_data_ids; }
+
+    [[nodiscard]]
+    std::vector<std::uint32_t> const& m2SkinFileDataIDs() const { return _m2_skin_file_data_ids; }
 
     void seek(std::size_t offset);
     void seekRelative(std::size_t offset);
@@ -75,6 +84,7 @@ namespace BlizzardArchive
     bool _eof;
     std::vector<char> _buffer;
     std::vector<std::uint32_t> _m2_texture_file_data_ids;
+    std::vector<std::uint32_t> _m2_skin_file_data_ids;
     size_t _pointer;
     bool _external;
     std::filesystem::path _disk_path;

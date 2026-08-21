@@ -5,11 +5,20 @@
 #include <system_error>
 #include <cstring>
 #include <cstdint>
+#include <algorithm>
 
 using namespace BlizzardArchive;
 
 namespace
 {
+  constexpr std::size_t md20_version_offset = 4;
+  constexpr std::size_t md20_n_textures_offset = 80;
+  constexpr std::size_t md20_ofs_textures_offset = 84;
+  constexpr std::size_t md20_texture_def_size = 16;
+  constexpr std::size_t md20_texture_type_offset = 0;
+  constexpr std::size_t md20_texture_name_len_offset = 8;
+  constexpr std::size_t md20_texture_name_ofs_offset = 12;
+
   bool has_m2_extension(Listfile::FileKey const& file_key)
   {
     if (!file_key.hasFilepath())
@@ -25,7 +34,73 @@ namespace
       && path[n - 1] == '2';
   }
 
-  bool unwrap_chunked_m2_md21(std::vector<char>& buffer, std::vector<std::uint32_t>& texture_file_data_ids)
+  bool read_u32(std::vector<char> const& buffer, std::size_t offset, std::uint32_t& value)
+  {
+    if (offset + sizeof(value) > buffer.size())
+      return false;
+    std::memcpy(&value, buffer.data() + offset, sizeof(value));
+    return true;
+  }
+
+  bool write_u32(std::vector<char>& buffer, std::size_t offset, std::uint32_t value)
+  {
+    if (offset + sizeof(value) > buffer.size())
+      return false;
+    std::memcpy(buffer.data() + offset, &value, sizeof(value));
+    return true;
+  }
+
+  void inject_txid_paths(std::vector<char>& md20,
+                         std::vector<std::uint32_t> const& texture_file_data_ids,
+                         ClientData* client_data)
+  {
+    if (!client_data || texture_file_data_ids.empty())
+      return;
+
+    std::uint32_t n_textures = 0;
+    std::uint32_t ofs_textures = 0;
+    if (!read_u32(md20, md20_n_textures_offset, n_textures)
+        || !read_u32(md20, md20_ofs_textures_offset, ofs_textures))
+      return;
+
+    if (ofs_textures > md20.size())
+      return;
+
+    auto const available_defs = (md20.size() - ofs_textures) / md20_texture_def_size;
+    auto const count = std::min<std::size_t>(
+      { static_cast<std::size_t>(n_textures), texture_file_data_ids.size(), available_defs });
+
+    for (std::size_t i = 0; i < count; ++i)
+    {
+      auto const def = static_cast<std::size_t>(ofs_textures) + i * md20_texture_def_size;
+
+      std::uint32_t type = 0;
+      std::uint32_t name_len = 0;
+      if (!read_u32(md20, def + md20_texture_type_offset, type)
+          || !read_u32(md20, def + md20_texture_name_len_offset, name_len))
+        continue;
+
+      if (type != 0 || name_len != 0 || texture_file_data_ids[i] == 0)
+        continue;
+
+      auto path = client_data->listfile()->getPath(texture_file_data_ids[i]);
+      if (path.empty())
+        continue;
+
+      auto const name_ofs = static_cast<std::uint32_t>(md20.size());
+      auto const stored_len = static_cast<std::uint32_t>(path.size() + 1);
+
+      md20.insert(md20.end(), path.begin(), path.end());
+      md20.push_back('\0');
+
+      write_u32(md20, def + md20_texture_name_len_offset, stored_len);
+      write_u32(md20, def + md20_texture_name_ofs_offset, name_ofs);
+    }
+  }
+
+  bool unwrap_chunked_m2_md21(std::vector<char>& buffer,
+                              std::vector<std::uint32_t>& texture_file_data_ids,
+                              ClientData* client_data)
   {
     if (buffer.size() < 12)
       return false;
@@ -72,17 +147,25 @@ namespace
       return false;
 
     std::vector<char> md20(body, body + md21_size);
+
+    std::uint32_t version = 0;
+    if (read_u32(md20, md20_version_offset, version) && version == 274)
+      write_u32(md20, md20_version_offset, 272);
+
+    inject_txid_paths(md20, texture_file_data_ids, client_data);
+
     buffer.swap(md20);
     return true;
   }
 
   void adapt_modern_m2_buffer(Listfile::FileKey const& file_key,
                               std::vector<char>& buffer,
-                              std::vector<std::uint32_t>& texture_file_data_ids)
+                              std::vector<std::uint32_t>& texture_file_data_ids,
+                              ClientData* client_data)
   {
     texture_file_data_ids.clear();
     if (has_m2_extension(file_key))
-      unwrap_chunked_m2_md21(buffer, texture_file_data_ids);
+      unwrap_chunked_m2_md21(buffer, texture_file_data_ids, client_data);
   }
 }
 
@@ -110,14 +193,14 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
     input.seekg(0, std::ios::beg);
     input.read(_buffer.data(), _buffer.size());
     input.close();
-    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids);
+    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, client_data);
     return;
   }
 
   if (client_data->readFile(file_key, _buffer))
   {
     _eof = false;
-    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids);
+    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, client_data);
     return;
   }
 

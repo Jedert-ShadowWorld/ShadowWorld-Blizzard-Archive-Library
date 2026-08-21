@@ -6,6 +6,10 @@
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <mutex>
+#include <unordered_map>
 
 using namespace BlizzardArchive;
 
@@ -18,6 +22,48 @@ namespace
   constexpr std::size_t md20_texture_type_offset = 0;
   constexpr std::size_t md20_texture_name_len_offset = 8;
   constexpr std::size_t md20_texture_name_ofs_offset = 12;
+
+  std::mutex modern_file_id_mutex;
+  std::unordered_map<std::string, std::uint32_t> modern_file_ids;
+
+  std::string normalize_path(std::string path)
+  {
+    std::transform(path.begin(), path.end(), path.begin(), [](unsigned char c)
+    {
+      if (c == '\\')
+        return '/';
+      return static_cast<char>(std::tolower(c));
+    });
+    return path;
+  }
+
+  void remember_modern_file_id(std::string const& filepath, std::uint32_t file_data_id)
+  {
+    if (filepath.empty() || !file_data_id)
+      return;
+
+    std::lock_guard<std::mutex> lock(modern_file_id_mutex);
+    modern_file_ids[normalize_path(filepath)] = file_data_id;
+  }
+
+  std::uint32_t remembered_modern_file_id(std::string const& filepath)
+  {
+    if (filepath.empty())
+      return 0;
+
+    std::lock_guard<std::mutex> lock(modern_file_id_mutex);
+    auto const it = modern_file_ids.find(normalize_path(filepath));
+    return it == modern_file_ids.end() ? 0u : it->second;
+  }
+
+  void restore_registered_file_id(Listfile::FileKey& file_key)
+  {
+    if (file_key.hasFileDataID() || !file_key.hasFilepath())
+      return;
+
+    if (auto const file_data_id = remembered_modern_file_id(file_key.filepath()))
+      file_key.setFileDataID(file_data_id);
+  }
 
   bool has_m2_extension(Listfile::FileKey const& file_key)
   {
@@ -87,6 +133,8 @@ namespace
       if (path.empty())
         continue;
 
+      remember_modern_file_id(path, texture_file_data_ids[i]);
+
       auto const name_ofs = static_cast<std::uint32_t>(md20.size());
       auto const stored_len = static_cast<std::uint32_t>(path.size() + 1);
 
@@ -98,8 +146,44 @@ namespace
     }
   }
 
-  bool unwrap_chunked_m2_md21(std::vector<char>& buffer,
+  void register_sfid_paths(Listfile::FileKey const& model_key,
+                           std::vector<std::uint32_t> const& skin_file_data_ids,
+                           ClientData* client_data)
+  {
+    if (!model_key.hasFilepath() || skin_file_data_ids.empty())
+      return;
+
+    auto const& model_path = model_key.filepath();
+    if (model_path.size() < 3)
+      return;
+
+    auto const base = model_path.substr(0, model_path.size() - 3);
+    for (std::size_t i = 0; i < skin_file_data_ids.size(); ++i)
+    {
+      auto const file_data_id = skin_file_data_ids[i];
+      if (!file_data_id)
+        continue;
+
+      // Prefer the listfile's canonical name when available. Also register the
+      // legacy Noggit-generated 00.skin/01.skin name because Model::initCommon
+      // opens views by that name.
+      if (client_data && client_data->listfile())
+      {
+        auto const canonical = client_data->listfile()->getPath(file_data_id);
+        if (!canonical.empty())
+          remember_modern_file_id(canonical, file_data_id);
+      }
+
+      char suffix[16] = {};
+      std::snprintf(suffix, sizeof(suffix), "%02zu.skin", i);
+      remember_modern_file_id(base + suffix, file_data_id);
+    }
+  }
+
+  bool unwrap_chunked_m2_md21(Listfile::FileKey const& file_key,
+                              std::vector<char>& buffer,
                               std::vector<std::uint32_t>& texture_file_data_ids,
+                              std::vector<std::uint32_t>& skin_file_data_ids,
                               ClientData* client_data)
   {
     if (buffer.size() < 12)
@@ -130,6 +214,16 @@ namespace
             std::memcpy(texture_file_data_ids.data(), buffer.data() + payload, size);
         }
       }
+      else if (id[0] == 'S' && id[1] == 'F' && id[2] == 'I' && id[3] == 'D')
+      {
+        if ((size % sizeof(std::uint32_t)) == 0)
+        {
+          auto const count = size / sizeof(std::uint32_t);
+          skin_file_data_ids.resize(count);
+          if (count)
+            std::memcpy(skin_file_data_ids.data(), buffer.data() + payload, size);
+        }
+      }
       else if (id[0] == 'M' && id[1] == 'D' && id[2] == '2' && id[3] == '1')
       {
         md21_payload = payload;
@@ -153,6 +247,7 @@ namespace
       write_u32(md20, md20_version_offset, 272);
 
     inject_txid_paths(md20, texture_file_data_ids, client_data);
+    register_sfid_paths(file_key, skin_file_data_ids, client_data);
 
     buffer.swap(md20);
     return true;
@@ -161,12 +256,19 @@ namespace
   void adapt_modern_m2_buffer(Listfile::FileKey const& file_key,
                               std::vector<char>& buffer,
                               std::vector<std::uint32_t>& texture_file_data_ids,
+                              std::vector<std::uint32_t>& skin_file_data_ids,
                               ClientData* client_data)
   {
     texture_file_data_ids.clear();
+    skin_file_data_ids.clear();
     if (has_m2_extension(file_key))
-      unwrap_chunked_m2_md21(buffer, texture_file_data_ids, client_data);
+      unwrap_chunked_m2_md21(file_key, buffer, texture_file_data_ids, skin_file_data_ids, client_data);
   }
+}
+
+void ClientFile::registerModernFileDataID(std::string const& filepath, std::uint32_t file_data_id)
+{
+  remember_modern_file_id(filepath, file_data_id);
 }
 
 ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_data)
@@ -177,7 +279,11 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
 {
   if (client_data->version() != ClientVersion::WOTLK)
   {
+    // The placement/SFID bridge is authoritative when present. Only then ask
+    // the listfile to fill whichever half of the key is still missing.
+    restore_registered_file_id(_file_key);
     _file_key.deduceOtherComponent(client_data->listfile());
+    restore_registered_file_id(_file_key);
   }
 
   _disk_path = client_data->getDiskPath(_file_key);
@@ -193,19 +299,14 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
     input.seekg(0, std::ios::beg);
     input.read(_buffer.data(), _buffer.size());
     input.close();
-    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, client_data);
+    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, _m2_skin_file_data_ids, client_data);
     return;
   }
 
-  // For modern CASC clients, deduceOtherComponent() may add the authoritative
-  // FileDataID to a pathname-only key. Read with the resolved key so CASC opens
-  // by FileDataID instead of performing a second pathname lookup. This keeps
-  // modern ADT/M2 references stable even when listfile aliases or renamed paths
-  // are present.
   if (client_data->readFile(_file_key, _buffer))
   {
     _eof = false;
-    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, client_data);
+    adapt_modern_m2_buffer(_file_key, _buffer, _m2_texture_file_data_ids, _m2_skin_file_data_ids, client_data);
     return;
   }
 
@@ -223,7 +324,9 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
 {
   if (client_data->version() != ClientVersion::WOTLK)
   {
+    restore_registered_file_id(_file_key);
     _file_key.deduceOtherComponent(client_data->listfile());
+    restore_registered_file_id(_file_key);
   }
 
   _disk_path = client_data->getDiskPath(_file_key);

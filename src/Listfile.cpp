@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdint>
+#include <algorithm>
 
 using namespace BlizzardArchive::Listfile;
 
@@ -54,6 +55,8 @@ FileKey::FileKey(std::uint32_t file_data_id, Listfile* listfile)
 
 void Listfile::initFromCSV(std::string const& listfile_path)
 {
+  _csv_path = listfile_path;
+
   std::ifstream fstream;
   fstream.open(listfile_path);
 
@@ -77,7 +80,15 @@ void Listfile::initFromCSV(std::string const& listfile_path)
 
       uid = std::atoi(uid_str.c_str());
 
-      _path_to_fdid[ClientData::normalizeFilenameInternal(filename)] = uid;
+      auto source_filename = filename;
+      std::transform(source_filename.begin(), source_filename.end(), source_filename.begin(), ::tolower);
+      std::replace(source_filename.begin(), source_filename.end(), '\\', '/');
+      bool const is_legacy_model_alias = source_filename.ends_with(".mdx") || source_filename.ends_with(".mdl");
+      auto normalized_filename = ClientData::normalizeFilenameInternal(filename);
+
+      if (!is_legacy_model_alias || _path_to_fdid.find(normalized_filename) == _path_to_fdid.end())
+        _path_to_fdid[normalized_filename] = uid;
+
       _fdid_to_path[uid] = ClientData::normalizeFilenameWoW(filename);
 
     }
@@ -121,7 +132,8 @@ void BlizzardArchive::Listfile::Listfile::addFile(std::string const& filepath)
 
 std::uint32_t Listfile::getFileDataID(std::string const& filename) const
 {
-  auto it = _path_to_fdid.find(filename);
+  auto normalized_filename = ClientData::normalizeFilenameInternal(filename);
+  auto it = _path_to_fdid.find(normalized_filename);
 
   if (it != _path_to_fdid.end())
   {
@@ -225,7 +237,6 @@ FileKey& FileKey::operator=(FileKey&& other) noexcept
   std::swap(_file_path, other._file_path);
   return *this;
 }
-
 FileKey::FileKey(FileKey const& other)
 : _file_data_id(other._file_data_id)
 , _file_path(other._file_path)
@@ -239,4 +250,5 @@ FileKey& FileKey::operator= (FileKey const& other)
 
   return *this;
 }
+
 

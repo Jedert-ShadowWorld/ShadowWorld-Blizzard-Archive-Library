@@ -25,8 +25,10 @@ namespace BlizzardArchive::Listfile
 
     std::unordered_map<std::string, std::uint32_t> const& pathToFileDataIDMap() const { return _path_to_fdid; };
     std::unordered_map<std::uint32_t, std::string> const& fileDataIDToPathMap() const { return _fdid_to_path; };
+    std::string const& csvPath() const { return _csv_path; };
 
   private:
+    std::string _csv_path;
     std::unordered_map<std::string, std::uint32_t> _path_to_fdid;
     std::unordered_map<std::uint32_t, std::string> _fdid_to_path;
   };

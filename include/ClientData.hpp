@@ -155,6 +155,9 @@ namespace BlizzardArchive
     [[nodiscard]]
     bool readFile(Listfile::FileKey const& file_key, std::vector<char>& buffer);
 
+    [[nodiscard]]
+    std::string lastArchiveErrorString() const { return _last_archive_error; }
+
     // bool addFile(Listfile::FileKey const& file_key, std::vector<char>& buffer, Archive::BaseArchive* dest_archive);
     // bool addFile(Listfile::FileKey const& file_key, Archive::BaseArchive* dest_archive);
 
@@ -262,6 +265,7 @@ namespace BlizzardArchive
     // A sorted list of loaded archives. The last one is the most up-to-date one.
     std::vector<Archive::BaseArchive*> _archives;
     Listfile::Listfile _listfile;
+    mutable std::string _last_archive_error;
 
     // sync
     std::mutex _mutex;

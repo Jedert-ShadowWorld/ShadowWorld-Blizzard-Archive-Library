@@ -2,10 +2,25 @@
 #include <Exception.hpp>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <system_error>
 #include <cstring>
 
 using namespace BlizzardArchive;
+
+namespace
+{
+  std::string file_key_debug_string(BlizzardArchive::Listfile::FileKey const& key)
+  {
+    std::ostringstream stream;
+    stream << "{path=";
+    stream << (key.hasFilepath() ? key.filepath() : "<none>");
+    stream << ", fdid=";
+    stream << (key.hasFileDataID() ? std::to_string(key.fileDataID()) : "<none>");
+    stream << "}";
+    return stream.str();
+  }
+}
 
 ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_data)
   : _file_key(file_key)
@@ -35,16 +50,37 @@ ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_dat
     return;
   }
 
-  if (client_data->readFile(file_key, _buffer))
+  if (client_data->readFile(_file_key, _buffer))
   {
     _eof = false;
     return;
   }
+
+  if (_file_key.hasFilepath())
+  {
+    auto const canonical_file_data_id = client_data->listfile()->getFileDataID(_file_key.filepath());
+    if (canonical_file_data_id
+        && (!_file_key.hasFileDataID() || canonical_file_data_id != _file_key.fileDataID()))
+    {
+      Listfile::FileKey canonical_key(_file_key.filepath(), canonical_file_data_id);
+      if (client_data->readFile(canonical_key, _buffer))
+      {
+        _file_key = canonical_key;
+        _eof = false;
+        return;
+      }
+    }
+  }
  
   throw Exceptions::FileReadFailedError(
-    "File '"
-    + (file_key.hasFilepath() ? file_key.filepath() : std::to_string(file_key.fileDataID()))
-    + "' does not exist or some other error occured.");
+    "File read failed. requested="
+    + file_key_debug_string(file_key)
+    + ", resolved="
+    + file_key_debug_string(_file_key)
+    + (client_data->lastArchiveErrorString().empty()
+        ? std::string()
+        : ", archive_error=" + client_data->lastArchiveErrorString())
+    + ".");
 }
 
 ClientFile::ClientFile(Listfile::FileKey const& file_key, ClientData* client_data, NEW_FILE_T)

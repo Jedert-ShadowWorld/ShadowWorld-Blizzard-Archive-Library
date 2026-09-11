@@ -1,4 +1,4 @@
 [submodule "cmake"]
 	path = cmake
-	url = https://gitlab.com/prophecy-rp/build-dependencies.git
-	branch = dep-cmake
+	url = https://github.com/Jedert-ShadowWorld/ShadowWorld-Noggit-Red-Modern.git
+	branch = dependency-cmake-archive

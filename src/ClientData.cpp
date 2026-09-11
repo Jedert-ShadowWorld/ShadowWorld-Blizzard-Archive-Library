@@ -432,17 +432,26 @@ bool ClientData::readFile(Listfile::FileKey const& file_key, std::vector<char>& 
   const std::lock_guard _lock(_mutex);
 
   HANDLE file_handle = nullptr;
+  _last_archive_error.clear();
 
   for (auto it = _archives.rbegin(); it != _archives.rend(); ++it)
   {
     if (!(*it)->openFile(file_key, _locale_mode, &file_handle))
+    {
+      auto const archive_error = (*it)->lastErrorString();
+      if (!archive_error.empty())
+        _last_archive_error = archive_error + " in " + (*it)->path();
       continue;
+    }
 
     std::uint64_t buf_size = (*it)->getFileSize(file_handle);
 
     // skip empty files
     if (!buf_size)
+    {
+        (*it)->closeFile(file_handle);
         continue;
+    }
 
     buffer.resize(buf_size);
 
@@ -601,11 +610,16 @@ bool ClientData::exists(Listfile::FileKey const& file_key)
   }
 
   const std::lock_guard _lock(_mutex);
+  _last_archive_error.clear();
 
   for (auto it = _archives.rbegin(); it != _archives.rend(); ++it)
   {
     if ((*it)->exists(file_key, _locale_mode))
       return true;
+
+    auto const archive_error = (*it)->lastErrorString();
+    if (!archive_error.empty())
+      _last_archive_error = archive_error + " in " + (*it)->path();
   }
 
   return false;

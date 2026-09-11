@@ -3,6 +3,7 @@
 
 #include <ClientData.hpp>
 #include <cstdint>
+#include <string>
 
 namespace BlizzardArchive::Listfile
 {
@@ -32,6 +33,9 @@ namespace BlizzardArchive::Archive
 
     [[nodiscard]]
     virtual bool exists(Listfile::FileKey const& file_key, Locale locale) const = 0;
+
+    [[nodiscard]]
+    virtual std::string lastErrorString() const { return {}; }
 
   protected:
     std::string _path;

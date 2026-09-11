@@ -29,8 +29,13 @@ namespace BlizzardArchive::Archive
     [[nodiscard]]
     bool exists(Listfile::FileKey const& file_key, Locale locale) const override;
 
+    [[nodiscard]]
+    std::string lastErrorString() const override;
+
   private:
     HANDLE _handle = nullptr;
+    mutable std::uint32_t _last_error = 0;
+    mutable std::string _diagnostics;
   };
 
 }

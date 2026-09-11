@@ -14,8 +14,21 @@ using namespace BlizzardArchive::Archive;
 
 namespace
 {
-  bool casc_open_file_with_wow_locale_fallback(HANDLE storage, const void* file_name, DWORD open_flags, HANDLE* file_handle, std::uint32_t& last_error)
+  bool casc_open_file_with_wow_locale_fallback(HANDLE storage, const void* file_name, DWORD open_flags,
+                                               bool neutral_locale_first, HANDLE* file_handle,
+                                               std::uint32_t& last_error)
   {
+    if (neutral_locale_first)
+    {
+      if (CascOpenFile(storage, file_name, CASC_LOCALE_NONE, open_flags, file_handle))
+      {
+        last_error = ERROR_SUCCESS;
+        return true;
+      }
+
+      last_error = GetCascError();
+    }
+
     static constexpr std::array<DWORD, 4> locale_masks =
     {
       CASC_LOCALE_ALL_WOW,
@@ -147,8 +160,10 @@ CASCArchive::CASCArchive(std::string const& path
                          , std::string const& cache_path
                          , Locale locale
                          , OpenMode open_mode
+                         , bool neutral_locale_first
                          , Listfile::Listfile* listfile)
   : BaseArchive(path, locale, listfile)
+  , _neutral_locale_first(neutral_locale_first)
 {
   switch (open_mode)
   {
@@ -162,7 +177,7 @@ CASCArchive::CASCArchive(std::string const& path
       args.PtrProgressParam = nullptr;
       args.PfnProductCallback = nullptr;
       args.PtrProductParam = nullptr;
-      args.dwLocaleMask = CASC_LOCALE_ALL_WOW;
+      args.dwLocaleMask = _neutral_locale_first ? CASC_LOCALE_NONE : CASC_LOCALE_ALL_WOW;
       args.szBuildKey = nullptr;
       args.szCdnHostUrl = path.c_str();
 
@@ -185,7 +200,7 @@ CASCArchive::CASCArchive(std::string const& path
       args.PtrProgressParam = nullptr;
       args.PfnProductCallback = nullptr;
       args.PtrProductParam = nullptr;
-      args.dwLocaleMask = CASC_LOCALE_ALL_WOW;
+      args.dwLocaleMask = _neutral_locale_first ? CASC_LOCALE_NONE : CASC_LOCALE_ALL_WOW;
       args.szBuildKey = nullptr;
       args.szCdnHostUrl = nullptr;
 
@@ -211,24 +226,28 @@ bool CASCArchive::openFile(Listfile::FileKey const& file_key, Locale locale, HAN
   {
     assert(file_key.fileDataID());
 
-    if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_key.fileDataID()), CASC_OPEN_BY_FILEID, file_handle, _last_error))
+    if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_key.fileDataID()), CASC_OPEN_BY_FILEID,
+                                                _neutral_locale_first, file_handle, _last_error))
       return true;
   }
 
   if (file_key.hasFilepath())
   {
     auto const casc_path = wow_casc_path(file_key.filepath());
-    if (casc_open_file_with_wow_locale_fallback(_handle, casc_path.c_str(), CASC_OPEN_BY_NAME, file_handle, _last_error))
+    if (casc_open_file_with_wow_locale_fallback(_handle, casc_path.c_str(), CASC_OPEN_BY_NAME,
+                                                _neutral_locale_first, file_handle, _last_error))
       return true;
 
     auto const wow_path = BlizzardArchive::ClientData::normalizeFilenameWoW(file_key.filepath());
-    if (wow_path != casc_path && casc_open_file_with_wow_locale_fallback(_handle, wow_path.c_str(), CASC_OPEN_BY_NAME, file_handle, _last_error))
+    if (wow_path != casc_path && casc_open_file_with_wow_locale_fallback(
+          _handle, wow_path.c_str(), CASC_OPEN_BY_NAME, _neutral_locale_first, file_handle, _last_error))
       return true;
 
     auto const file_data_id = _listfile->getFileDataID(file_key.filepath());
     if (file_data_id)
     {
-      if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_data_id), CASC_OPEN_BY_FILEID, file_handle, _last_error))
+      if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_data_id), CASC_OPEN_BY_FILEID,
+                                                  _neutral_locale_first, file_handle, _last_error))
         return true;
     }
   }
@@ -269,7 +288,8 @@ bool CASCArchive::exists(Listfile::FileKey const& file_key, Locale locale) const
   {
     assert(file_key.fileDataID());
 
-    if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_key.fileDataID()), CASC_OPEN_BY_FILEID, &file_handle, _last_error))
+    if (casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_key.fileDataID()), CASC_OPEN_BY_FILEID,
+                                                _neutral_locale_first, &file_handle, _last_error))
     {
       CascCloseFile(file_handle);
       return true;
@@ -279,21 +299,25 @@ bool CASCArchive::exists(Listfile::FileKey const& file_key, Locale locale) const
   if (file_key.hasFilepath())
   {
     auto const casc_path = wow_casc_path(file_key.filepath());
-    if (casc_open_file_with_wow_locale_fallback(_handle, casc_path.c_str(), CASC_OPEN_BY_NAME, &file_handle, _last_error))
+    if (casc_open_file_with_wow_locale_fallback(_handle, casc_path.c_str(), CASC_OPEN_BY_NAME,
+                                                _neutral_locale_first, &file_handle, _last_error))
     {
       CascCloseFile(file_handle);
       return true;
     }
 
     auto const wow_path = BlizzardArchive::ClientData::normalizeFilenameWoW(file_key.filepath());
-    if (wow_path != casc_path && casc_open_file_with_wow_locale_fallback(_handle, wow_path.c_str(), CASC_OPEN_BY_NAME, &file_handle, _last_error))
+    if (wow_path != casc_path && casc_open_file_with_wow_locale_fallback(
+          _handle, wow_path.c_str(), CASC_OPEN_BY_NAME, _neutral_locale_first, &file_handle, _last_error))
     {
       CascCloseFile(file_handle);
       return true;
     }
 
     auto const file_data_id = _listfile->getFileDataID(file_key.filepath());
-    if (file_data_id && casc_open_file_with_wow_locale_fallback(_handle, CASC_FILE_DATA_ID(file_data_id), CASC_OPEN_BY_FILEID, &file_handle, _last_error))
+    if (file_data_id && casc_open_file_with_wow_locale_fallback(
+          _handle, CASC_FILE_DATA_ID(file_data_id), CASC_OPEN_BY_FILEID,
+          _neutral_locale_first, &file_handle, _last_error))
     {
       CascCloseFile(file_handle);
       return true;

@@ -363,13 +363,15 @@ void ClientData::initializeCASCStorage()
   {
     case OpenMode::LOCAL:
     {
-      _archives.push_back(new Archive::CASCArchive(_path, "", _locale_mode, _open_mode, &_listfile));
+      _archives.push_back(new Archive::CASCArchive(
+        _path, "", _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile));
       break;
     }
     case OpenMode::REMOTE:
     {
       assert(_cdn_cache_path.has_value());
-      _archives.push_back(new Archive::CASCArchive(_path, _cdn_cache_path.value(), _locale_mode, _open_mode, &_listfile));
+      _archives.push_back(new Archive::CASCArchive(
+        _path, _cdn_cache_path.value(), _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile));
       break;
     }
   }

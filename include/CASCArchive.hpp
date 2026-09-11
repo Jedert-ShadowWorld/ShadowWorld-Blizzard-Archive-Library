@@ -14,7 +14,8 @@ namespace BlizzardArchive::Archive
   class CASCArchive : public BaseArchive
   {
   public:
-    CASCArchive(std::string const& path, std::string const& cache_path, Locale locale, OpenMode open_mode, Listfile::Listfile* listfile);
+    CASCArchive(std::string const& path, std::string const& cache_path, Locale locale, OpenMode open_mode,
+                bool neutral_locale_first, Listfile::Listfile* listfile);
     ~CASCArchive() override;
 
     [[nodiscard]]
@@ -34,6 +35,7 @@ namespace BlizzardArchive::Archive
 
   private:
     HANDLE _handle = nullptr;
+    bool _neutral_locale_first = false;
     mutable std::uint32_t _last_error = 0;
     mutable std::string _diagnostics;
   };

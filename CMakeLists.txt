@@ -12,7 +12,10 @@ SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 INCLUDE(cmake/cmake_function.cmake)
 INCLUDE(FetchContent)
-SET(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+LIST(PREPEND CMAKE_MODULE_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake-overrides/"
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/"
+)
 
 PROJECT("BlizzardArchiveLib")
 

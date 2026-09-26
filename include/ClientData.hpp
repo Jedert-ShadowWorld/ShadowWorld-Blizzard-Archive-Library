@@ -28,6 +28,7 @@ namespace BlizzardArchive
     WOTLK = 0,
     SL = 1,
     RETAIL = 2,
+    FOREVER = 3,
   };
 
   enum class StorageType : char

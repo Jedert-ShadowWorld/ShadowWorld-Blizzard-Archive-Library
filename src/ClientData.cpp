@@ -25,7 +25,7 @@ ClientData::ClientData(std::string const& path, ClientVersion version, Locale lo
   if (_storage_type == StorageType::CASC)
   {
     fs::path client_path(_path);
-    if (client_path.filename() == "_retail_" && fs::exists(client_path.parent_path() / ".build.info"))
+    if (client_path.filename() == "_retail_" && fs::exists(client_path.parent_path() / "Data"))
       _path = client_path.parent_path().string();
   }
 
@@ -358,20 +358,21 @@ void ClientData::initializeMPQStorage()
 void ClientData::initializeCASCStorage()
 {
   _listfile.initFromCSV((fs::path(_local_path) / "listfile.csv").string());
+  std::string const product_code = _version == ClientVersion::FOREVER ? "wow_classic_beta" : "wow";
 
   switch (_open_mode)
   {
     case OpenMode::LOCAL:
     {
       _archives.push_back(new Archive::CASCArchive(
-        _path, "", _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile));
+        _path, "", _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile, product_code));
       break;
     }
     case OpenMode::REMOTE:
     {
       assert(_cdn_cache_path.has_value());
       _archives.push_back(new Archive::CASCArchive(
-        _path, _cdn_cache_path.value(), _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile));
+        _path, _cdn_cache_path.value(), _locale_mode, _open_mode, _version != ClientVersion::WOTLK, &_listfile, product_code));
       break;
     }
   }

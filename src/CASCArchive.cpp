@@ -416,6 +416,13 @@ CASCArchive::CASCArchive(std::string const& path
     }
   }
 
+  // Public TACT key missing from the bundled CascLib list; without it the
+  // 9.2.7 Map table has an opaque section and cannot be rewritten losslessly.
+  // Source: https://github.com/wowdev/TACTKeys/blob/master/WoW.txt
+  CascAddStringEncryptionKey(_handle, 0xB9A5FE4AAF12D195ULL, "11DC97DED64BF545056473CB8C53A58A");
+  if (std::filesystem::exists("tactkeys.txt"))
+    CascImportKeysFromFile(_handle, "tactkeys.txt");
+
   auto const preload_diagnostics = preload_wow_root_listfile(_handle, listfile);
   if (!_diagnostics.empty() && !preload_diagnostics.empty())
     _diagnostics += "; ";

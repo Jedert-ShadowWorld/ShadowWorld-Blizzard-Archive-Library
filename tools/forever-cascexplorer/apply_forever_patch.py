@@ -219,7 +219,7 @@ patch("CASCExplorer/CASCExplorer.csproj", [
 ])
 patch("CASCExplorer/MainForm.cs", [
     ('            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;',
-     """            var foreverDbMenu = new ToolStripMenuItem("Forever DB2 browser (actual FileDataIDs)...");
+     r"""            var foreverDbMenu = new ToolStripMenuItem("Forever DB2 browser (actual FileDataIDs)...");
             foreverDbMenu.Click += (src, args) =>
             {
                 if (viewHelper.CASC == null)
@@ -241,7 +241,7 @@ patch("CASCExplorer/MainForm.cs", [
             };
             toolsToolStripMenuItem.DropDownItems.Add(foreverDbMenu);
 
-            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;""')
+            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;"""')
 ])
 
 print("Patch applied successfully.")

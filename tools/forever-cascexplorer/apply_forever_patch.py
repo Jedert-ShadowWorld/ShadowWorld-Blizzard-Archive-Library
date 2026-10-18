@@ -113,7 +113,7 @@ patch("CASCExplorer/InitForm.cs", [
                 }
                 casc.Root.LoadListFile(Settings.Default.ListFilePath, backgroundWorker1);"""),
     ("            using (var s = casc.OpenFile(\"DBFilesClient\\\\FileDataComplete.db2\"))\n            {\n                WDC1Reader fd = new WDC1Reader(s);",
-     r'''            using (var s = casc.OpenFile("DBFilesClient\FileDataComplete.db2"))
+     r'''            using (var s = casc.OpenFile("DBFilesClient\\FileDataComplete.db2"))
             {
                 byte[] magic = new byte[4];
                 if (s.Read(magic, 0, 4) != 4)

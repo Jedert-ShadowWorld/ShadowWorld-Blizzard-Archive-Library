@@ -20,6 +20,11 @@ jobs:
           git clone --recurse-submodules https://github.com/WoW-Tools/CASCExplorer.git source
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Copy Forever-specific DB2 browser into source tree
+        shell: pwsh
+        run: |
+          Copy-Item "tools/forever-cascexplorer/ForeverDataBrowserForm.cs" "source/CASCExplorer/ForeverDataBrowserForm.cs"
+
       - name: Apply WoW Forever local patch
         shell: pwsh
         run: |
@@ -58,6 +63,9 @@ jobs:
           Copy-Item "source/CASCExplorer/bin/Release/*" "CASCExplorer-Forever/" -Recurse -Force
           @(
             "WoW Forever CASCExplorer - portable, Windows, .NET Framework 4.8.",
+            "Tools > Forever DB2 browser: race/model/texture IDs from your own CSV exports.",
+            "Put the six exported CSV files in a folder named ForeverData beside the EXE.",
+            "This build does not ship your private/custom CSV files inside the GitHub artifact.",
             "Extract the entire ZIP (including listfile.csv) to a writable folder.",
             "Run CASCExplorer.exe, then File > Open Storage.",
             "Choose the World of Warcraft installation folder containing .build.info.",

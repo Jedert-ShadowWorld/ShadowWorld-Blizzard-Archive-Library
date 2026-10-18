@@ -192,4 +192,17 @@ patch("CascLib/CascLib/CASCHandlerBase.cs", [
                     throw;
             }''')
 ])
+# Community listfile contains millions of entries from other client builds.
+# Avoid one log line per unknown/duplicate name and millions of progress callbacks.
+patch("CascLib/CascLib/RootHandlers/WowRootHandler.cs", [
+    ('                    string line;\n\n                    char[] splitChar',
+     '                    string line;\n                    int lineNumber = 0;\n\n                    char[] splitChar'),
+    ('                    while ((line = sr.ReadLine()) != null)\n                    {\n                        string[] tokens = line.Split(splitChar, 2);',
+     '                    while ((line = sr.ReadLine()) != null)\n                    {\n                        lineNumber++;\n                        string[] tokens = line.Split(splitChar, 2);'),
+    ('                            Logger.WriteLine($"Invalid fileDataId in listfile: {line}");\n                            continue;',
+     '                            // A combined community listfile includes IDs missing in this game build.\n                            continue;'),
+    ('                        else\n                            Logger.WriteLine($"Duplicate fileDataId {fileDataId} detected: {line}");\n\n                        worker?.ReportProgress((int)(sr.BaseStream.Position / (float)sr.BaseStream.Length * 100));',
+     '                        // Existing names come from higher-priority custom listfiles.\n\n                        if (lineNumber % 25000 == 0)\n                            worker?.ReportProgress((int)(sr.BaseStream.Position / (float)sr.BaseStream.Length * 100));')
+])
+
 print("Patch applied successfully.")

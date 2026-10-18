@@ -135,7 +135,13 @@ patch("CASCExplorer/InitForm.cs", [
 
                 if (selectedListfile != null)
                     casc.Root.LoadListFile(selectedListfile, backgroundWorker1);
-                else
+
+                // Always supplement selected names with the bundled community listfile.
+                if (File.Exists(defaultListfile) &&
+                    !string.Equals(defaultListfile, selectedListfile, StringComparison.OrdinalIgnoreCase))
+                    casc.Root.LoadListFile(defaultListfile, backgroundWorker1);
+
+                if (selectedListfile == null && !File.Exists(defaultListfile))
                     Logger.WriteLine("No listfile found. Place listfile.csv beside CASCExplorer.exe.");"""),
     ("            using (var s = casc.OpenFile(\"DBFilesClient\\\\FileDataComplete.db2\"))\n            {\n                WDC1Reader fd = new WDC1Reader(s);",
      r'''            using (var s = casc.OpenFile("DBFilesClient\\FileDataComplete.db2"))

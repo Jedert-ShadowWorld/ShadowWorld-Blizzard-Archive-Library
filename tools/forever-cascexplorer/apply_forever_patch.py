@@ -105,13 +105,38 @@ patch("CASCExplorer/InitForm.cs", [
      "            CASCConfig.LoadFlags |= LoadFlags.FileIndex;\n" +
      "            CASCConfig.UseOnlineFallbackForMissingFiles = online;"),
     ("                casc.Root.LoadListFile(Settings.Default.ListFilePath, backgroundWorker1);",
-     """                if (!online)
+     """                // Custom overrides are loaded first and keep priority for their FileDataIDs.
+                if (!online)
                 {
                     string customListfile = Path.Combine(path, "forever-listfile.csv");
                     if (File.Exists(customListfile))
                         casc.Root.LoadListFile(customListfile, backgroundWorker1);
+
+                    string localListfile = Path.Combine(path, "listfile.csv");
+                    if (File.Exists(localListfile))
+                        casc.Root.LoadListFile(localListfile, backgroundWorker1);
                 }
-                casc.Root.LoadListFile(Settings.Default.ListFilePath, backgroundWorker1);"""),
+
+                string defaultListfile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "listfile.csv");
+                string savedListfile = Settings.Default.ListFilePath;
+                string selectedListfile = null;
+
+                if (!string.IsNullOrWhiteSpace(savedListfile))
+                {
+                    string candidate = Path.IsPathRooted(savedListfile)
+                        ? savedListfile
+                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, savedListfile);
+                    if (File.Exists(candidate))
+                        selectedListfile = candidate;
+                }
+
+                if (selectedListfile == null && File.Exists(defaultListfile))
+                    selectedListfile = defaultListfile;
+
+                if (selectedListfile != null)
+                    casc.Root.LoadListFile(selectedListfile, backgroundWorker1);
+                else
+                    Logger.WriteLine("No listfile found. Place listfile.csv beside CASCExplorer.exe.");"""),
     ("            using (var s = casc.OpenFile(\"DBFilesClient\\\\FileDataComplete.db2\"))\n            {\n                WDC1Reader fd = new WDC1Reader(s);",
      r'''            using (var s = casc.OpenFile("DBFilesClient\\FileDataComplete.db2"))
             {
@@ -131,6 +156,16 @@ patch("CASCExplorer/MainForm.cs", [
     ('            statusProgress.Visible = false;\n            statusLabel.Text = string.Format("Loaded {0} files ({1} names missing)", casc.Root.CountSelect - casc.Root.CountUnknown, casc.Root.CountUnknown);',
      '            statusProgress.Visible = false;\n            statusLabel.Text = string.Format("Loaded {0} files ({1} names missing)", casc.Root.CountSelect - casc.Root.CountUnknown, casc.Root.CountUnknown);\n' +
      '            Text = "CASCExplorer - " + cfg.Product + " - " + cfg.VersionName + " - " + (cfg.OnlineMode ? "ONLINE" : cfg.BasePath);')
+])
+
+patch("CASCExplorer/MainForm.cs", [
+    ("                    viewHelper?.CASC?.Root?.LoadListFile(Settings.Default.ListFilePath);",
+     """                    if (viewHelper?.CASC?.Root != null)
+                    {
+                        // Rebuild folders now; LoadListFile alone only updates the name dictionary.
+                        viewHelper.CASC.Root.LoadListFile(Settings.Default.ListFilePath);
+                        viewHelper.ChangeLocale(Settings.Default.LocaleFlags.ToString());
+                    }""")
 ])
 
 patch("CascLib/CascLib/CASCHandlerBase.cs", [

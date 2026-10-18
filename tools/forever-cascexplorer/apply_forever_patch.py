@@ -244,4 +244,27 @@ patch("CASCExplorer/MainForm.cs", [
             useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;"""')
 ])
 
+
+# Inject exact DB2-derived FileDataID links into the main tree on every rebuild.
+patch("CASCExplorer/InitForm.cs", [
+    ("            casc.Root.MergeInstall(casc.Install);\n            GC.Collect();",
+     "            casc.Root.MergeInstall(casc.Install);\n            ForeverDataBrowserForm.AddVerifiedRaceFolders(fldr, casc);\n            GC.Collect();")
+])
+patch("CASCExplorer/CASCViewHelper.cs", [
+    ("            Settings.Default.LocaleFlags = (LocaleFlags)Enum.Parse(typeof(LocaleFlags), locale);\n\n" +
+     "            _root = _casc.Root.SetFlags(Settings.Default.LocaleFlags, Settings.Default.OverrideArchive, Settings.Default.PreferHighResTextures);\n" +
+     "            _casc.Root.MergeInstall(_casc.Install);\n\n            OnStorageChanged?.Invoke();",
+     "            Settings.Default.LocaleFlags = (LocaleFlags)Enum.Parse(typeof(LocaleFlags), locale);\n\n" +
+     "            _root = _casc.Root.SetFlags(Settings.Default.LocaleFlags, Settings.Default.OverrideArchive, Settings.Default.PreferHighResTextures);\n" +
+     "            _casc.Root.MergeInstall(_casc.Install);\n" +
+     "            ForeverDataBrowserForm.AddVerifiedRaceFolders(_root, _casc);\n\n            OnStorageChanged?.Invoke();"),
+    ("            Settings.Default.PreferHighResTextures = preferHighResTextures;\n\n" +
+     "            _root = _casc.Root.SetFlags(Settings.Default.LocaleFlags, Settings.Default.OverrideArchive, Settings.Default.PreferHighResTextures);\n" +
+     "            _casc.Root.MergeInstall(_casc.Install);\n\n            OnStorageChanged?.Invoke();",
+     "            Settings.Default.PreferHighResTextures = preferHighResTextures;\n\n" +
+     "            _root = _casc.Root.SetFlags(Settings.Default.LocaleFlags, Settings.Default.OverrideArchive, Settings.Default.PreferHighResTextures);\n" +
+     "            _casc.Root.MergeInstall(_casc.Install);\n" +
+     "            ForeverDataBrowserForm.AddVerifiedRaceFolders(_root, _casc);\n\n            OnStorageChanged?.Invoke();")
+])
+
 print("Patch applied successfully.")

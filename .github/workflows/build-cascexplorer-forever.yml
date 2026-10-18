@@ -24,6 +24,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item "tools/forever-cascexplorer/ForeverDataBrowserForm.cs" "source/CASCExplorer/ForeverDataBrowserForm.cs"
+          Copy-Item "tools/forever-cascexplorer/ForeverM2Dependencies.cs" "source/CASCExplorer/ForeverM2Dependencies.cs"
 
       - name: Apply WoW Forever local patch
         shell: pwsh
@@ -64,6 +65,8 @@ jobs:
           @(
             "WoW Forever CASCExplorer - portable, Windows, .NET Framework 4.8.",
             "Tools > Forever DB2 browser: race/model/texture IDs from your own CSV exports.",
+            "Expand a race Male/Female folder to discover embedded M2 skin, texture, skeleton, bone and animation file references.",
+            "This does NOT include custom character-skin variants; additional ChrCustomization DB2 tables are necessary.",
             "Put the six exported CSV files in a folder named ForeverData beside the EXE.",
             "This build does not ship your private/custom CSV files inside the GitHub artifact.",
             "Extract the entire ZIP (including listfile.csv) to a writable folder.",

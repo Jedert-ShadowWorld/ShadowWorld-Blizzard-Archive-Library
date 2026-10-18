@@ -131,6 +131,74 @@ namespace CASCExplorer
             return (csv ?? "").Split(',').Select(Number).Where(x => x > 0).Distinct();
         }
 
+        // Also add a clearly-marked, DB2-derived directory to the MAIN CASC tree.
+        // These names are generated shortcuts to the genuine FileDataIDs, never claimed
+        // to be original on-disk client paths or decrypted by name inference.
+        public static void AddVerifiedRaceFolders(CASCFolder root, CASCHandler casc)
+        {
+            if (root == null || casc == null || !(casc.Root is WowRootHandler wowRoot)) return;
+            string baseDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ForeverData");
+            string[] required = { "ChrRaces", "ChrModel", "ChrRaceXChrModel", "CreatureDisplayInfo", "CreatureModelData" };
+            if (required.Any(x => !File.Exists(Path.Combine(baseDir, x + ".csv")))) return;
+
+            try
+            {
+                var namedRaces = Index(ReadRows(baseDir, "ChrRaces"));
+                var chrModels = Index(ReadRows(baseDir, "ChrModel"));
+                var raceLinks = ReadRows(baseDir, "ChrRaceXChrModel");
+                var displays = Index(ReadRows(baseDir, "CreatureDisplayInfo"));
+                var modelData = Index(ReadRows(baseDir, "CreatureModelData"));
+                var verified = new CASCFolder("Forever DB2 (verified FileDataID links)");
+                int added = 0;
+
+                void Link(CASCFolder folder, int fid, string extension)
+                {
+                    if (fid <= 0 || !wowRoot.FileExist(fid)) return;
+                    // The selected game's root determines the real CASC hash.
+                    ulong hash = wowRoot.GetHashByFileDataId(fid);
+                    string name = extension.ToUpperInvariant().TrimStart('.') + "_FileDataID_" + fid + extension;
+                    if (!folder.Files.ContainsKey(name))
+                    {
+                        folder.Files[name] = new CASCFile(hash, "ForeverDB2\\" + name);
+                        added++;
+                    }
+                }
+
+                foreach (var relation in raceLinks)
+                {
+                    var race = Get(namedRaces, Value(relation, "ChrRacesID"));
+                    var chr = Get(chrModels, Value(relation, "ChrModelID"));
+                    var disp = Get(displays, Value(chr, "DisplayID"));
+                    var mdl = Get(modelData, Value(disp, "ModelID"));
+                    if (race == null || mdl == null) continue;
+                    string raceId = Value(race, "ID");
+                    string raceName = Safe(Value(race, "Name_lang"));
+                    bool playable = Number(race, "PlayableRaceBit") >= 0 &&
+                                    Value(race, "PlayableRaceBit") != "-1";
+                    string groupName = playable ? "Playable races" : "NPC and other races";
+                    if (!verified.Folders.TryGetValue(groupName, out CASCFolder group))
+                        verified.Folders[groupName] = group = new CASCFolder(groupName);
+                    string raceFolderName = raceName + "_RaceID_" + raceId;
+                    if (!group.Folders.TryGetValue(raceFolderName, out CASCFolder byRace))
+                        group.Folders[raceFolderName] = byRace = new CASCFolder(raceFolderName);
+                    string sexName = Value(relation, "Sex") == "0" ? "Male" : "Female";
+                    if (!byRace.Folders.TryGetValue(sexName, out CASCFolder bySex))
+                        byRace.Folders[sexName] = bySex = new CASCFolder(sexName);
+                    Link(bySex, Number(mdl, "FileDataID"), ".m2");
+                    Link(bySex, Number(chr, "SkeletonFileDataID"), ".skel");
+                    foreach (int fid in Ids(Value(disp, "TextureVariationFileDataID")))
+                        Link(bySex, fid, ".blp");
+                    Link(bySex, Number(disp, "PortraitTextureFileDataID"), ".blp");
+                }
+                if (added > 0)
+                {
+                    root.Folders[verified.Name] = verified;
+                    Logger.WriteLine("ForeverDB2: inserted " + added + " verified FileDataID shortcuts into CASC tree.");
+                }
+            }
+            catch (Exception ex) { Logger.WriteLine("Forever DB2 tree: " + ex.Message); }
+        }
+
         public ForeverDataBrowserForm(CASCHandler source)
         {
             casc = source ?? throw new ArgumentNullException(nameof(source));

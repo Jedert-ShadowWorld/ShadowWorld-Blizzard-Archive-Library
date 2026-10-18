@@ -185,6 +185,11 @@ namespace CASCExplorer
                     if (!byRace.Folders.TryGetValue(sexName, out CASCFolder bySex))
                         byRace.Folders[sexName] = bySex = new CASCFolder(sexName);
                     Link(bySex, Number(mdl, "FileDataID"), ".m2");
+                    // Mark the Male/Female folder expandable; resolve M2 chunk references
+                    // lazily only when the user opens it.
+                    if (!bySex.Folders.ContainsKey("Related assets (expand race to scan)"))
+                        bySex.Folders["Related assets (expand race to scan)"] =
+                            new CASCFolder("Related assets (expand race to scan)");
                     Link(bySex, Number(chr, "SkeletonFileDataID"), ".skel");
                     foreach (int fid in Ids(Value(disp, "TextureVariationFileDataID")))
                         Link(bySex, fid, ".blp");

@@ -1,0 +1,56 @@
+name: Build WoW Forever CASCExplorer (Windows)
+
+on:
+  push:
+    branches:
+      - build/forever-cascexplorer
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone original CASCExplorer with dependencies
+        shell: pwsh
+        run: |
+          git clone --recurse-submodules https://github.com/WoW-Tools/CASCExplorer.git source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Apply WoW Forever local patch
+        shell: pwsh
+        run: |
+          py -3 tools/forever-cascexplorer/apply_forever_patch.py source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile .NET Framework 4.8 with Visual Studio 2022
+        shell: pwsh
+        run: |
+          $nuget = (Get-Command nuget.exe -ErrorAction SilentlyContinue).Source
+          if ($nuget) {
+            & $nuget restore "source/CASCExplorer.sln" -NonInteractive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          if (-not $msbuild) { throw "Visual Studio MSBuild not available" }
+          & $msbuild "source/CASCExplorer.sln" /t:Restore,Build /p:Configuration=Release '/p:Platform=Any CPU' /m /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package portable binary and documentation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "CASCExplorer-Forever" | Out-Null
+          Copy-Item "source/CASCExplorer/bin/Release/*" "CASCExplorer-Forever/" -Recurse -Force
+          "WoW Forever - choose File > Open Storage and select the WoW folder containing .build.info." | Out-File "CASCExplorer-Forever/README_FOREVER.txt" -Encoding utf8
+          if (-not (Test-Path "CASCExplorer-Forever/CASCExplorer.exe")) { throw "Missing CASCExplorer.exe after build" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CASCExplorer-Forever-Windows
+          path: CASCExplorer-Forever/
+          if-no-files-found: error
+          retention-days: 14

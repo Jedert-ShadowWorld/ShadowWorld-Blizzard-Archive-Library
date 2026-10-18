@@ -40,12 +40,33 @@ jobs:
           & $msbuild "source/CASCExplorer.sln" /t:Restore,Build /p:Configuration=Release '/p:Platform=Any CPU' /m /v:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Fetch latest community listfile (required for named files)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "CASCExplorer-Forever" | Out-Null
+          $url = 'https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv'
+          curl.exe --fail --location --retry 3 --retry-delay 5 --output "CASCExplorer-Forever/listfile.csv" $url
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $len = (Get-Item "CASCExplorer-Forever/listfile.csv").Length
+          if ($len -lt 10000000) { throw "Downloaded listfile too small; refusing to publish" }
+          Write-Host "Bundled community listfile of $len bytes"
+
       - name: Package portable binary and documentation
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "CASCExplorer-Forever" | Out-Null
           Copy-Item "source/CASCExplorer/bin/Release/*" "CASCExplorer-Forever/" -Recurse -Force
-          "WoW Forever - choose File > Open Storage and select the WoW folder containing .build.info." | Out-File "CASCExplorer-Forever/README_FOREVER.txt" -Encoding utf8
+          @(
+            "WoW Forever CASCExplorer - portable, Windows, .NET Framework 4.8.",
+            "Extract the entire ZIP (including listfile.csv) to a writable folder.",
+            "Run CASCExplorer.exe, then File > Open Storage.",
+            "Choose the World of Warcraft installation folder containing .build.info.",
+            "The program will load listfile.csv from its own folder automatically.",
+            "For your own additions place forever-listfile.csv in the WoW game root.",
+            "File > Open list file supports selecting a CSV file manually and refreshes the UI.",
+            "Community listfile by wowdev/wow-listfile (github.com/wowdev/wow-listfile).",
+            "Some WoW Forever names may still be unknown; full client compatibility not guaranteed."
+          ) | Out-File "CASCExplorer-Forever/README_FOREVER.txt" -Encoding utf8
           if (-not (Test-Path "CASCExplorer-Forever/CASCExplorer.exe")) { throw "Missing CASCExplorer.exe after build" }
 
       - uses: actions/upload-artifact@v4

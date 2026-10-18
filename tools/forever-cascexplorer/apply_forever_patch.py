@@ -267,4 +267,15 @@ patch("CASCExplorer/CASCViewHelper.cs", [
      "            ForeverDataBrowserForm.AddVerifiedRaceFolders(_root, _casc);\n\n            OnStorageChanged?.Invoke();")
 ])
 
+
+# Scan genuine on-disk M2 references only when a Forever race folder is expanded.
+patch("CASCExplorer/CASCExplorer.csproj", [
+    ('    <Compile Include="ForeverDataBrowserForm.cs" />',
+     '    <Compile Include="ForeverDataBrowserForm.cs" />\n    <Compile Include="ForeverM2Dependencies.cs" />')
+])
+patch("CASCExplorer/MainForm.cs", [
+    ("        private void treeView1_BeforeExpand(object sender, TreeViewCancelEventArgs e)\n        {\n            viewHelper.CreateTreeNodes(e.Node);",
+     "        private void treeView1_BeforeExpand(object sender, TreeViewCancelEventArgs e)\n        {\n            ForeverM2Dependencies.PopulateOnExpand(e.Node, viewHelper.CASC);\n            viewHelper.CreateTreeNodes(e.Node);")
+])
+
 print("Patch applied successfully.")

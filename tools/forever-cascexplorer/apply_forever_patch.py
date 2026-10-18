@@ -241,7 +241,7 @@ patch("CASCExplorer/MainForm.cs", [
             };
             toolsToolStripMenuItem.DropDownItems.Add(foreverDbMenu);
 
-            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;"""')
+            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;""")
 ])
 
 

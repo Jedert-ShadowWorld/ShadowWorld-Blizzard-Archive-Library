@@ -211,4 +211,37 @@ patch("CascLib/CascLib/RootHandlers/WowRootHandler.cs", [
      '                        // Existing names come from higher-priority custom listfiles.\n\n                        if (lineNumber % 25000 == 0)\n                            worker?.ReportProgress((int)(sr.BaseStream.Position / (float)sr.BaseStream.Length * 100));')
 ])
 
+
+# Wire the new model/texture ID explorer into the CASCExplorer UI and .csproj.
+patch("CASCExplorer/CASCExplorer.csproj", [
+    ('    <Compile Include="FileScanner.cs" />',
+     '    <Compile Include="FileScanner.cs" />\n    <Compile Include="ForeverDataBrowserForm.cs" />')
+])
+patch("CASCExplorer/MainForm.cs", [
+    ('            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;',
+     """            var foreverDbMenu = new ToolStripMenuItem("Forever DB2 browser (actual FileDataIDs)...");
+            foreverDbMenu.Click += (src, args) =>
+            {
+                if (viewHelper.CASC == null)
+                {
+                    MessageBox.Show("Open the local WoW Forever CASC first.");
+                    return;
+                }
+                try
+                {
+                    using (var browser = new ForeverDataBrowserForm(viewHelper.CASC))
+                        browser.ShowDialog(this);
+                }
+                catch (Exception exc)
+                {
+                    MessageBox.Show("Cannot open Forever DB2 exports:\r\n" + exc.Message +
+                        "\r\nKeep all six CSV files inside ForeverData beside the EXE.",
+                        "WoW Forever DB2 Browser", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+            toolsToolStripMenuItem.DropDownItems.Add(foreverDbMenu);
+
+            useLVToolStripMenuItem.Checked = Settings.Default.OverrideArchive;""')
+])
+
 print("Patch applied successfully.")
